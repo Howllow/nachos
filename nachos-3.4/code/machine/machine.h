@@ -25,6 +25,7 @@
 #include "utility.h"
 #include "translate.h"
 #include "disk.h"
+#include "list.h"
 
 // Definitions related to the size, and format of user memory
 
@@ -109,10 +110,8 @@ class Machine {
     Machine(bool debug);	// Initialize the simulation of the hardware
 				// for running user programs
     ~Machine();			// De-allocate the data structures
-
 // Routines callable by the Nachos kernel
     void Run();	 		// Run a user program
-
     int ReadRegister(int num);	// read the contents of a CPU register
 
     void WriteRegister(int num, int value);
@@ -180,14 +179,28 @@ class Machine {
 					// "read-only" to Nachos kernel code
 
     TranslationEntry *pageTable;
+		List* TLBList;
     unsigned int pageTableSize;
-
+		int tlbmiss;
+		int tlbhit;
   private:
     bool singleStep;		// drop back into the debugger after each
 				// simulated instruction
     int runUntilTime;		// drop back into the debugger when simulated
 				// time reaches this value
 };
+
+class TLBPos {
+	public:
+		int index;
+		int lru;
+		TLBPos(int i) {
+			index = i;
+			lru = 0;
+		};
+};
+extern void ChangeLRU(TLBPos* a, int index);
+
 
 extern void ExceptionHandler(ExceptionType which);
 				// Entry point into Nachos for handling

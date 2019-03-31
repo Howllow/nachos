@@ -9,7 +9,7 @@
 #define SYSTEM_H
 
 #define MAX_TID	128 // max num of threads
-
+#define Strategy 0
 #include "copyright.h"
 #include "utility.h"
 #include "thread.h"

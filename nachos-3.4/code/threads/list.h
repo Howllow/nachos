@@ -53,11 +53,12 @@ class List {
 
     void Mapcar(VoidFunctionPtr func);	// Apply "func" to every element 
 					// on the list
+    void Change(int index); // Used in LRU
     unsigned int NumInList() { return numInList;};
 
     bool IsEmpty();		// is the list empty? 
     
-
+    void PrintL();
     // Routines to put/get items on/off list in order (sorted by key)
     void SortedInsert(void *item, int sortKey);	// Put item into list
     void *SortedRemove(int *keyPtr); 	  	// Remove first item from list

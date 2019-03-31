@@ -17,7 +17,7 @@
 
 #include "copyright.h"
 #include "list.h"
-
+#include "machine.h"
 //----------------------------------------------------------------------
 // ListElement::ListElement
 // 	Initialize a list element, so it can be added somewhere on a list.
@@ -149,6 +149,16 @@ List::Mapcar(VoidFunctionPtr func)
     }
 }
 
+void
+List::Change(int index)
+{
+    for (ListElement *ptr = first; ptr != NULL; ptr = ptr->next) {
+       ChangeLRU((TLBPos*) (ptr)->item, index);
+       //printf("%d, ", ((TLBPos*) (ptr)->item)->lru);
+    }
+    //printf("\n");
+}
+
 //----------------------------------------------------------------------
 // List::IsEmpty
 //      Returns TRUE if the list is empty (has no items).
@@ -274,3 +284,26 @@ List::Remove(void *item)
    //ASSERT(!IsInList(item));
 }
 
+void 
+ChangeLRU(TLBPos* a, int index)
+{
+		if (a->index != index)
+			a->lru--;
+        else
+            a->lru = 0;
+		return;
+}
+
+void
+PrintLRU(TLBPos* a)
+{
+    printf("index:%d, LRU:%d ", a->index, a->lru);
+}
+
+void List::PrintL()
+{
+    for (ListElement *ptr = first; ptr != NULL; ptr = ptr->next) {
+       PrintLRU((TLBPos*) (ptr)->item);
+    }
+    printf("\n");
+}
