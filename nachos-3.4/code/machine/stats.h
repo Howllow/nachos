@@ -27,7 +27,8 @@ class Statistics {
     int userTicks;       	// Time spent executing user code
 				// (this is also equal to # of
 				// user instructions executed)
-
+    int tlbhit;
+    int tlbmiss;
     int numDiskReads;		// number of disk read requests
     int numDiskWrites;		// number of disk write requests
     int numConsoleCharsRead;	// number of characters read from the keyboard

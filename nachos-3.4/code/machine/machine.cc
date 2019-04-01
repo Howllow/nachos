@@ -54,8 +54,9 @@ void CheckEndian()
 
 Machine::Machine(bool debug)
 {
+    tlbmiss = 0;
+    tlbhit = 0;
     int i;
-
     for (i = 0; i < NumTotalRegs; i++)
         registers[i] = 0;
     mainMemory = new char[MemorySize];
@@ -64,8 +65,9 @@ Machine::Machine(bool debug)
 #ifdef USE_TLB
     tlb = new TranslationEntry[TLBSize];
     for (i = 0; i < TLBSize; i++)
-	tlb[i].valid = FALSE;
+	    tlb[i].valid = FALSE;
     pageTable = NULL;
+    TLBList = new List();
 #else	// use linear page table
     tlb = NULL;
     pageTable = NULL;
@@ -211,4 +213,3 @@ void Machine::WriteRegister(int num, int value)
 	// DEBUG('m', "WriteRegister %d, value %d\n", num, value);
 	registers[num] = value;
     }
-

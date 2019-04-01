@@ -26,6 +26,71 @@
 #include "syscall.h"
 
 //----------------------------------------------------------------------
+// TLBMissHandler
+// Function to deal with tlb miss
+// strat=0:FIFO; strat=1:LRU;
+//----------------------------------------------------------------------
+void
+SortTLBList()
+{
+    TLBPos* tmp1 = machine->TLBList->Remove();
+    TLBPos* tmp2 = machine->TLBList->Remove();
+    TLBPos* tmp3 = machine->TLBList->Remove();
+    TLBPos* tmp4 = machine->TLBList->Remove();
+    machine->TLBList->SortedInsert(tmp1, tmp1->lru);
+    machine->TLBList->SortedInsert(tmp2, tmp2->lru);
+    machine->TLBList->SortedInsert(tmp3, tmp3->lru);
+    machine->TLBList->SortedInsert(tmp4, tmp4->lru);
+}
+int
+FindPos()
+{
+    for (int i = 0; i < TLBSize; i++) {
+        if (machine->tlb[i].valid == FALSE)
+            return i;
+    }
+    return -1;
+}
+void
+TLBMissHandler(int strat)
+{
+    int vaddr = machine->registers[BadVAddrReg];
+    unsigned int vpn = (unsigned) vaddr / PageSize;
+    int index;
+    if (machine->TLBList->NumInList() < TLBSize) {
+        index = FindPos();
+        ASSERT(index != -1);
+        TLBPos* tmp = new TLBPos(index);
+        if (strat) {
+            machine->TLBList->Change(index);
+        }
+        machine->TLBList->Append(tmp);
+    }
+    else if (!strat) {
+        TLBPos* tmp = machine->TLBList->Remove();
+        index = tmp->index;
+        //printf("%d\n", index);
+        machine->TLBList->Append(tmp);
+    }
+    else {
+        SortTLBList();
+        //machine->TLBList->PrintL();
+        TLBPos* tmp = machine->TLBList->Remove();
+        index = tmp->index;
+        tmp->lru = 0;
+        machine->TLBList->Change(index);
+        machine->TLBList->Append(tmp);
+    }
+    //printf("%d\n", index);
+    machine->tlb[index].valid = TRUE;
+    machine->tlb[index].virtualPage = vpn;
+    machine->tlb[index].physicalPage = machine->pageTable[vpn].physicalPage;
+    machine->tlb[index].use = FALSE;
+    machine->tlb[index].dirty = FALSE;
+    machine->tlb[index].readOnly = FALSE;
+}
+
+//----------------------------------------------------------------------
 // ExceptionHandler
 // 	Entry point into the Nachos kernel.  Called when a user program
 //	is executing, and either does a syscall, or generates an addressing
@@ -55,10 +120,15 @@ ExceptionHandler(ExceptionType which)
 
     if ((which == SyscallException) && (type == SC_Halt)) {
 	DEBUG('a', "Shutdown, initiated by user program.\n");
+    printf("TLBMiss: %d,  TLBHit: %d,  MissRate: %f\n", machine->tlbmiss, machine->tlbhit, 
+                                    float(machine->tlbmiss) / ((machine->tlbmiss) + (machine->tlbhit)));
    	interrupt->Halt();
     } 
-    else if ((which == PageFaultException) && (tlb != NULL)) {
-    	TLBMissHandler(1);
+    else if ((which == PageFaultException) && (machine->tlb != NULL)) {
+    	TLBMissHandler(Strategy);
+    }
+    else if ((which == PageFaultException) && (machine->tlb == NULL)) {
+        ASSERT(FALSE);
     }
     else {
 	printf("Unexpected user mode exception %d %d\n", which, type);
