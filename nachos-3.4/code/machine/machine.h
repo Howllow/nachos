@@ -26,7 +26,7 @@
 #include "translate.h"
 #include "disk.h"
 #include "list.h"
-
+#include "../userprog/bitmap.h"
 // Definitions related to the size, and format of user memory
 
 #define PageSize 	SectorSize 	// set the page size equal to
@@ -156,7 +156,7 @@ class Machine {
 				// code and data, while executing
     int registers[NumTotalRegs]; // CPU registers, for executing user programs
 
-
+    BitMap* MemoryMap;
 // NOTE: the hardware translation of virtual addresses in the user program
 // to physical addresses (relative to the beginning of "mainMemory")
 // can be controlled by one of:

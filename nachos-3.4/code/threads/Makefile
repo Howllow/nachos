@@ -63,7 +63,9 @@ list.o: ../threads/list.cc /usr/include/stdc-predef.h \
  /usr/include/i386-linux-gnu/bits/stdio_lim.h \
  /usr/include/i386-linux-gnu/bits/sys_errlist.h /usr/include/string.h \
  /usr/include/xlocale.h ../machine/machine.h ../threads/utility.h \
- ../machine/translate.h ../machine/disk.h ../threads/list.h
+ ../machine/translate.h ../machine/disk.h ../threads/list.h \
+ ../machine/../userprog/bitmap.h \
+ ../machine/../userprog/../filesys/openfile.h
 scheduler.o: ../threads/scheduler.cc /usr/include/stdc-predef.h \
  ../threads/copyright.h ../threads/scheduler.h ../threads/list.h \
  ../threads/utility.h ../threads/bool.h ../machine/sysdep.h \

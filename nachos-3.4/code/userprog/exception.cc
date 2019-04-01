@@ -24,6 +24,34 @@
 #include "copyright.h"
 #include "system.h"
 #include "syscall.h"
+#include "machine.h"
+
+//----------------------------------------------------------------------
+// ExitHandler
+// Function to deal with exit syscall
+//----------------------------------------------------------------------
+void
+ExitHandler()
+{
+    if (!currentThread->MapCleared){
+        currentThread->MapCleared = TRUE;
+        printf("Program: %s  is Exiting!!\n", currentThread->getName());
+        printf("TLBMiss: %d,  TLBHit: %d,  MissRate: %f\n", machine->tlbmiss, machine->tlbhit, 
+                                    float(machine->tlbmiss) / ((machine->tlbmiss) + (machine->tlbhit)));
+        for (int i = 0; i < machine->pageTableSize; i++) {
+            if (machine->pageTable[i].valid) {
+                machine->pageTable[i].valid = FALSE;
+                machine->pageTable[i].use = FALSE;
+                machine->pageTable[i].dirty = FALSE;
+                machine->pageTable[i].readOnly = FALSE; 
+                machine->MemoryMap->Clear(machine->pageTable[i].physicalPage);
+                printf("Deallocate physical page %d for Thread: %s\n", machine->pageTable[i].physicalPage, currentThread->getName());
+            }
+        }
+    }
+    machine->WriteRegister(PCReg, machine->ReadRegister(NextPCReg));
+    currentThread->Finish();
+}
 
 //----------------------------------------------------------------------
 // TLBMissHandler
@@ -120,10 +148,11 @@ ExceptionHandler(ExceptionType which)
 
     if ((which == SyscallException) && (type == SC_Halt)) {
 	DEBUG('a', "Shutdown, initiated by user program.\n");
-    printf("TLBMiss: %d,  TLBHit: %d,  MissRate: %f\n", machine->tlbmiss, machine->tlbhit, 
-                                    float(machine->tlbmiss) / ((machine->tlbmiss) + (machine->tlbhit)));
    	interrupt->Halt();
     } 
+    else if ((which == SyscallException) && (type == SC_Exit)) {
+        ExitHandler();
+    }
     else if ((which == PageFaultException) && (machine->tlb != NULL)) {
     	TLBMissHandler(Strategy);
     }

@@ -45,6 +45,7 @@ Thread::Thread(char* threadName)
     uid = getuid();
 #ifdef USER_PROGRAM
     space = NULL;
+    MapCleared = FALSE;
 #endif
 }
 

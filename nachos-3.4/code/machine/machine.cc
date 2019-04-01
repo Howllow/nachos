@@ -56,6 +56,7 @@ Machine::Machine(bool debug)
 {
     tlbmiss = 0;
     tlbhit = 0;
+    MemoryMap = new BitMap(NumPhysPages);
     int i;
     for (i = 0; i < NumTotalRegs; i++)
         registers[i] = 0;

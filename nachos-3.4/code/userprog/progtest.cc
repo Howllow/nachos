@@ -19,29 +19,43 @@
 // 	Run a user program.  Open the executable, load it into
 //	memory, and jump to it.
 //----------------------------------------------------------------------
-
+void
+NewProg(int which)
+{
+    printf("Thread: %s start running!!\n", currentThread->getName());
+    machine->Run();
+}
 void
 StartProcess(char *filename)
 {
     OpenFile *executable = fileSystem->Open(filename);
-    AddrSpace *space;
-
+    OpenFile *executable1 = fileSystem->Open(filename);
     if (executable == NULL) {
-	printf("Unable to open file %s\n", filename);
-	return;
+    printf("Unable to open file %s\n", filename);
+    return;
     }
-    space = new AddrSpace(executable);    
-    currentThread->space = space;
+    AddrSpace *space1;
+    AddrSpace *space2;
+    Thread* test1;
+    test1 = new Thread("test1");
+    printf("Initializing space for Thread:main!!\n");
+    space1 = new AddrSpace(executable);
+    currentThread->space = space1;
+    printf("Initializing space for Thread:test1!!\n");
+    space2 = new AddrSpace(executable1);
+    test1->space = space2;
 
     delete executable;			// close file
-
-    space->InitRegisters();		// set the initial register values
-    space->RestoreState();		// load page table register
-
-    machine->Run();			// jump to the user progam
-    ASSERT(FALSE);			// machine->Run never returns;
-					// the address space exits
-					// by doing the syscall "exit"
+    delete executable1;
+    space2->InitRegisters();
+    space2->RestoreState();
+    test1->Fork(NewProg, 1);
+    currentThread->Yield();
+    space1->InitRegisters();
+    space1->RestoreState();
+    printf("Thread: %s start running!!\n", currentThread->getName());
+    machine->Run();
+    ASSERT(FALSE);
 }
 
 // Data structures needed for the console test.  Threads making
