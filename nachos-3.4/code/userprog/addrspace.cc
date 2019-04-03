@@ -78,14 +78,15 @@ AddrSpace::AddrSpace(OpenFile *executable)
     numPages = divRoundUp(size, PageSize);
     size = numPages * PageSize;
 
-    ASSERT(numPages <= NumPhysPages);		// check we're not trying
+    //ASSERT(numPages <= NumPhysPages);		// check we're not trying
 						// to run anything too big --
 						// at least until we have
 						// virtual memory
-
+    
     DEBUG('a', "Initializing address space, num pages %d, size %d\n", 
 					numPages, size);
 // first, set up the translation 
+    /*
     pageTable = new TranslationEntry[numPages];
     for (i = 0; i < numPages; i++) {
 	pageTable[i].virtualPage = i;	// for now, virtual page # = phys page #
@@ -99,13 +100,13 @@ AddrSpace::AddrSpace(OpenFile *executable)
 	pageTable[i].readOnly = FALSE;  // if the code segment was entirely on 
 					// a separate page, we could set its 
 					// pages to be read-only
-    bzero(machine->mainMemory + ppn * PageSize, PageSize);
+    //bzero(machine->diskMemory + ppn * PageSize, PageSize);
     }
     
 // zero out the entire address space, to zero the unitialized data segment 
 // and the stack segment
     //bzero(machine->mainMemory, size);
-
+    
 // then, copy in the code and data segments into memory
     if (noffH.code.size > 0) {
         DEBUG('a', "Initializing code segment, at 0x%x, size %d\n", 
@@ -117,7 +118,7 @@ AddrSpace::AddrSpace(OpenFile *executable)
             int vpn = (noffH.code.virtualAddr + k) / PageSize; // calculate in which page this byte is
             int offset = (noffH.code.virtualAddr + k) % PageSize; // calculate the offset in this page
             int paddr = pageTable[vpn].physicalPage * PageSize + offset; // calculate the addr in mainMemory
-            executable->ReadAt(&(machine->mainMemory[paddr]), 1, nowpos++);
+            executable->ReadAt(&(machine->diskMemory[paddr]), 1, nowpos++);
         }
     }
     if (noffH.initData.size > 0) {
@@ -133,6 +134,31 @@ AddrSpace::AddrSpace(OpenFile *executable)
             executable->ReadAt(&(machine->mainMemory[paddr]), 1, nowpos++);
         }
     }
+    */
+
+    fileSystem->Create("vMem", size);
+    OpenFile *vMem = fileSystem->Open("vMem");
+    ASSERT(vMem != NULL);
+    if (noffH.code.size > 0) {
+        int fpos = noffH.code.inFileAddr;
+        int vpos = noffH.code.virtualAddr;
+        char tmp;
+        for (int j = 0; j < noffH.code.size; j++) {
+            executable->ReadAt(&(tmp), 1, fpos++);
+            vMem->WriteAt(&(tmp), 1, vpos++);
+        }
+    }
+
+    if (noffH.initData.size > 0) {
+        int fpos = noffH.initData.inFileAddr;
+        int vpos = noffH.initData.virtualAddr;
+        char tmp;
+        for (int j = 0; j < noffH.initData.size; j++) {
+            executable->ReadAt(&(tmp), 1, fpos++);
+            vMem->WriteAt(&(tmp), 1, vpos++);
+        }
+    }
+    delete vMem;
 
 }
 
@@ -188,8 +214,10 @@ AddrSpace::InitRegisters()
 
 void AddrSpace::SaveState() 
 {
+    #ifdef USE_TLB
     for (int i = 0; i < TLBSize; ++i)
         machine->tlb[i].valid = FALSE;
+    #endif
 }
 
 //----------------------------------------------------------------------

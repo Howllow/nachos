@@ -70,6 +70,16 @@ Machine::Machine(bool debug)
     pageTable = NULL;
     TLBList = new List();
 #else	// use linear page table
+    ipTable = new TranslationEntry[NumPhysPages];
+    for (int i = 0; i < NumPhysPages; i++) {
+        ipTable[i].valid = FALSE;
+        ipTable[i].use = FALSE;
+        ipTable[i].dirty = FALSE;
+        ipTable[i].virtualPage = -1;
+        ipTable[i].readOnly = FALSE;
+        ipTable[i].tid = -1;
+    }
+    IPList = new List();
     tlb = NULL;
     pageTable = NULL;
 #endif

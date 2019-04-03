@@ -26,6 +26,7 @@
 #include "translate.h"
 #include "disk.h"
 #include "list.h"
+#include "../filesys/filehdr.h"
 #include "../userprog/bitmap.h"
 // Definitions related to the size, and format of user memory
 
@@ -179,7 +180,9 @@ class Machine {
 					// "read-only" to Nachos kernel code
 
     TranslationEntry *pageTable;
-		List* TLBList;
+    TranslationEntry *ipTable;
+	List *TLBList;
+	List *IPList;
     unsigned int pageTableSize;
 		int tlbmiss;
 		int tlbhit;

@@ -20,33 +20,46 @@
 //	memory, and jump to it.
 //----------------------------------------------------------------------
 void
-NewProg(int which)
+NewProg(char* filename)
 {
-    printf("Thread: %s start running!!\n", currentThread->getName());
-    machine->Run();
-}
-void
-StartProcess(char *filename)
-{
+    
     OpenFile *executable = fileSystem->Open(filename);
-    OpenFile *executable1 = fileSystem->Open(filename);
     if (executable == NULL) {
     printf("Unable to open file %s\n", filename);
     return;
     }
+    AddrSpace *space;
+    printf("Initializing space for Program:%s!!\n", currentThread->getName());
+    space = new AddrSpace(executable);
+    /*
+    scheduler->Print();
+    currentThread->space = space;
+    */
+    space->InitRegisters();
+
+    //space->RestoreState();
+    printf("Program: %s start running!!\n", currentThread->getName());
+    machine->Run();
+
+}
+void
+StartProcess(char *filename)
+{
+    /*
+    OpenFile *executable = fileSystem->Open(filename);
+    OpenFile *executable1 = fileSystem->Open(filename);
+    if (executable == NULL) {
+    printf("Unable to open file %s!\n", filename);
+    return;
+    }
+    
     AddrSpace *space1;
     AddrSpace *space2;
-    Thread* test1;
-    test1 = new Thread("test1");
-    printf("Initializing space for Thread:main!!\n");
-    space1 = new AddrSpace(executable);
-    currentThread->space = space1;
     printf("Initializing space for Thread:test1!!\n");
+    space1 = new AddrSpace(executable);
+    printf("Initializing space for Thread:test2!!\n");
     space2 = new AddrSpace(executable1);
-    test1->space = space2;
-
-    delete executable;			// close file
-    delete executable1;
+    
     space2->InitRegisters();
     space2->RestoreState();
     test1->Fork(NewProg, 1);
@@ -56,6 +69,13 @@ StartProcess(char *filename)
     printf("Thread: %s start running!!\n", currentThread->getName());
     machine->Run();
     ASSERT(FALSE);
+    */
+    Thread* test1;
+    Thread* test2;
+    test1 = new Thread("test1");
+    test2 = new Thread("test2");
+    test1->Fork(NewProg, "../test/halt");
+    test2->Fork(NewProg, filename);
 }
 
 // Data structures needed for the console test.  Threads making

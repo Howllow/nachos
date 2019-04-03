@@ -35,9 +35,9 @@ ExitHandler()
 {
     if (!currentThread->MapCleared){
         currentThread->MapCleared = TRUE;
-        printf("Program: %s  is Exiting!!\n", currentThread->getName());
-        printf("TLBMiss: %d,  TLBHit: %d,  MissRate: %f\n", machine->tlbmiss, machine->tlbhit, 
-                                    float(machine->tlbmiss) / ((machine->tlbmiss) + (machine->tlbhit)));
+        printf("Program: %s is Exiting!!\n", currentThread->getName());
+       // printf("TLBMiss: %d,  TLBHit: %d,  MissRate: %f\n", machine->tlbmiss, machine->tlbhit, 
+                                    //float(machine->tlbmiss) / ((machine->tlbmiss) + (machine->tlbhit)));
         for (int i = 0; i < machine->pageTableSize; i++) {
             if (machine->pageTable[i].valid) {
                 machine->pageTable[i].valid = FALSE;
@@ -53,14 +53,43 @@ ExitHandler()
     currentThread->Finish();
 }
 
+void
+IPExitHandler()
+{
+    if (!currentThread->MapCleared){
+        currentThread->MapCleared = TRUE;
+        printf("Program: %s is Exiting!!\n", currentThread->getName());
+        for (int i = 0; i < NumPhysPages; i++) {
+            if (machine->ipTable[i].valid && machine->ipTable[i].tid == currentThread->getTid()) {
+                machine->ipTable[i].valid = FALSE;
+                machine->ipTable[i].use = FALSE;
+                machine->ipTable[i].dirty = FALSE;
+                machine->ipTable[i].readOnly = FALSE; 
+                machine->ipTable[i].tid = -1;
+                printf("Deallocate physical page %d for Thread: %s\n", i, currentThread->getName());
+            }
+        }
+    }
+    machine->WriteRegister(PCReg, machine->ReadRegister(NextPCReg));
+    currentThread->Finish();
+}
 //----------------------------------------------------------------------
 // TLBMissHandler
 // Function to deal with tlb miss
 // strat=0:FIFO; strat=1:LRU;
 //----------------------------------------------------------------------
 void
-SortTLBList()
+SortLRUList(List* list)
 {
+    int num = list->NumInList();
+    TLBPos* tmp[num];
+    for (int i = 0; i < num; i++) {
+        tmp[i] = list->Remove();
+    }
+    for (int i = 0; i < num; i++) {
+        list->SortedInsert(tmp[i], tmp[i]->lru);
+    }
+    /*
     TLBPos* tmp1 = machine->TLBList->Remove();
     TLBPos* tmp2 = machine->TLBList->Remove();
     TLBPos* tmp3 = machine->TLBList->Remove();
@@ -69,6 +98,7 @@ SortTLBList()
     machine->TLBList->SortedInsert(tmp2, tmp2->lru);
     machine->TLBList->SortedInsert(tmp3, tmp3->lru);
     machine->TLBList->SortedInsert(tmp4, tmp4->lru);
+    */
 }
 int
 FindPos()
@@ -101,7 +131,7 @@ TLBMissHandler(int strat)
         machine->TLBList->Append(tmp);
     }
     else {
-        SortTLBList();
+        SortLRUList(machine->TLBList);
         //machine->TLBList->PrintL();
         TLBPos* tmp = machine->TLBList->Remove();
         index = tmp->index;
@@ -116,6 +146,60 @@ TLBMissHandler(int strat)
     machine->tlb[index].use = FALSE;
     machine->tlb[index].dirty = FALSE;
     machine->tlb[index].readOnly = FALSE;
+}
+//----------------------------------------------------------------------
+// IPMissHandler
+// Function to deal with inverse page table
+//----------------------------------------------------------------------
+int 
+FindIPos()
+{
+    for (int i = 0; i < NumPhysPages; i++) {
+        if (!machine->ipTable[i].valid) {
+            return i;
+        }
+    }
+    return -1;
+}
+void
+IPMissHandler()
+{
+    OpenFile *vMem = fileSystem->Open("vMem");
+    ASSERT(vMem != NULL);
+
+    int vaddr = machine->registers[BadVAddrReg];
+    unsigned int vpn = (unsigned) vaddr / PageSize;
+    int index;
+    index = FindIPos();
+    if (index != -1) {
+        TLBPos* tmp = new TLBPos(index);
+        machine->IPList->Change(index);
+        machine->IPList->Append(tmp);
+    }
+    else {
+        SortLRUList(machine->IPList);
+        TLBPos* tmp = machine->IPList->Remove();
+        index = tmp->index;
+        tmp->lru = 0;
+        machine->IPList->Change(index);
+        machine->IPList->Append(tmp);
+        if (machine->ipTable[index].dirty) {
+            printf("Thread: %s Write back physical page %d\n", currentThread->getName(), index);
+            vMem->WriteAt(&(machine->mainMemory[index*PageSize]), PageSize
+                , machine->ipTable[index].virtualPage*PageSize);
+        }
+    }
+    bzero(machine->mainMemory + index * PageSize, PageSize);
+    printf("Thread: %s Loading virtual page %d at physical page %d\n", currentThread->getName(), vpn, index);
+    vMem->ReadAt(&(machine->mainMemory[index*PageSize]), PageSize, vpn*PageSize);
+    delete vMem;
+    machine->ipTable[index].valid = TRUE;
+    machine->ipTable[index].use = FALSE;
+    machine->ipTable[index].dirty = FALSE;
+    machine->ipTable[index].readOnly = FALSE;
+    machine->ipTable[index].tid = currentThread->getTid();
+    machine->ipTable[index].virtualPage = vpn;
+    machine->ipTable[index].physicalPage = index;
 }
 
 //----------------------------------------------------------------------
@@ -151,13 +235,16 @@ ExceptionHandler(ExceptionType which)
    	interrupt->Halt();
     } 
     else if ((which == SyscallException) && (type == SC_Exit)) {
-        ExitHandler();
+        if (machine->tlb != NULL)
+            ExitHandler();
+        else 
+            IPExitHandler();
     }
     else if ((which == PageFaultException) && (machine->tlb != NULL)) {
     	TLBMissHandler(Strategy);
     }
     else if ((which == PageFaultException) && (machine->tlb == NULL)) {
-        ASSERT(FALSE);
+        IPMissHandler();
     }
     else {
 	printf("Unexpected user mode exception %d %d\n", which, type);

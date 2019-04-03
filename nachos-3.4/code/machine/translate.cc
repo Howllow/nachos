@@ -201,14 +201,14 @@ Machine::Translate(int virtAddr, int* physAddr, int size, bool writing)
     
     // we must have either a TLB or a page table, but not both!
     //ASSERT(tlb == NULL || pageTable == NULL);	
-    ASSERT(tlb != NULL || pageTable != NULL);	
+    //ASSERT(tlb != NULL || pageTable != NULL);	
 
 // calculate the virtual page number, and offset within the page,
 // from the virtual address
     vpn = (unsigned) virtAddr / PageSize;
     offset = (unsigned) virtAddr % PageSize;
-    
     if (tlb == NULL) {		// => page table => vpn is index into table
+    	/*
 	if (vpn >= pageTableSize) {
 	    DEBUG('a', "virtual page # %d too large for page table size %d!\n", 
 			virtAddr, pageTableSize);
@@ -217,8 +217,21 @@ Machine::Translate(int virtAddr, int* physAddr, int size, bool writing)
 	    DEBUG('a', "virtual page # %d too large for page table size %d!\n", 
 			virtAddr, pageTableSize);
 	    return PageFaultException;
+
 	}
-	entry = &pageTable[vpn];
+	*/
+    	entry = NULL;
+		for (i = 0; i < NumPhysPages; i++) {
+			if (ipTable[i].valid && (ipTable[i].virtualPage == vpn) 
+				&& (ipTable[i].tid == currentThread->getTid())) {
+				entry = &ipTable[i];
+				IPList->Change(i);
+				break;
+			}
+
+		}
+		if (entry == NULL)
+			return PageFaultException;
     } else {
         for (entry = NULL, i = 0; i < TLBSize; i++)
     	    if (tlb[i].valid && (tlb[i].virtualPage == vpn)) {
