@@ -23,6 +23,20 @@ class AddrSpace {
     AddrSpace(OpenFile *executable);	// Create an address space,
 					// initializing it with the program
 					// stored in the file "executable"
+    AddrSpace(AddrSpace *a) {
+      pageTable = new TranslationEntry[numPages];
+      numPages = a->numPages;
+      for (int i = 0; i < numPages; i++) {
+      pageTable[i].virtualPage = a->pageTable[i].virtualPage; // for now, virtual page # = phys page #
+      pageTable[i].physicalPage = a->pageTable[i].physicalPage;
+      pageTable[i].valid =  a->pageTable[i].valid;
+      pageTable[i].use = a->pageTable[i].use;
+      pageTable[i].dirty = a->pageTable[i].dirty;
+      pageTable[i].readOnly = a->pageTable[i].readOnly;  // if the code segment was entirely on 
+
+    }
+      pageTable = a->pageTable;
+    }
     ~AddrSpace();			// De-allocate an address space
 
     void InitRegisters();		// Initialize user-level CPU registers,

@@ -59,10 +59,11 @@ extern int testnum;
 
 // External functions used by this file
 
-extern void ThreadTest(void), Copy(char *unixFile, char *nachosFile);
+extern void ThreadTest(void), Copy(char *unixFile, char *nachosFile), MakeDir(char* name);
 extern void Print(char *file), PerformanceTest(void);
 extern void StartProcess(char *file), ConsoleTest(char *in, char *out);
 extern void MailTest(int networkID);
+extern void PipeTest(char* data);
 
 //----------------------------------------------------------------------
 // main
@@ -87,7 +88,7 @@ main(int argc, char **argv)
     DEBUG('t', "Entering main");
     (void) Initialize(argc, argv);
 #ifdef THREADS
-    for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount) {
+    /*for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount) {
       argCount = 1;
       switch (argv[0][1]) {
       case 'q':
@@ -100,7 +101,7 @@ main(int argc, char **argv)
       }
     }
 
-    ThreadTest();
+    ThreadTest();*/
 #endif
 
     for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount) {
@@ -144,6 +145,14 @@ main(int argc, char **argv)
             fileSystem->Print();
 	} else if (!strcmp(*argv, "-t")) {	// performance test
             PerformanceTest();
+	} else if (!strcmp(*argv, "-mkdir")) {
+		ASSERT(argc == 2);
+		MakeDir(*(argv + 1));
+		argCount = 2;
+	} else if (!strcmp(*argv, "-pip")) {
+		ASSERT(argc == 2);
+		PipeTest(*(argv + 1));
+		argCount = 2;
 	}
 #endif // FILESYS
 #ifdef NETWORK

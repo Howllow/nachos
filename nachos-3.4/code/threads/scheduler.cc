@@ -54,9 +54,9 @@ void
 Scheduler::ReadyToRun (Thread *thread)
 {
     DEBUG('t', "Putting thread %s on ready list.\n", thread->getName());
+
     thread->setStatus(READY);
-    //readyList->SortedInsert((void *)thread, thread->getPrio());
-    readyList->SortedInsert((void *)thread, -thread->getCounter());
+    readyList->Append((void *)thread);
 }
 
 //----------------------------------------------------------------------
@@ -70,24 +70,7 @@ Scheduler::ReadyToRun (Thread *thread)
 Thread *
 Scheduler::FindNextToRun ()
 {
-    /*
-    Thread *headThread = (Thread *)readyList->Remove();
-    if (headThread == NULL) return;
-    int headp = headThread->getPrio();
-    readyList->SortedInsert(headThread, headThread->getPrio());
-    if (currentThread->getStatus() == BLOCKED)
-        return (Thread *)readyList->Remove();
-    else if (currentThread->getPrio() < headp) {
-        return NULL;
-    }
-    else
-        return (Thread *)readyList->Remove();
-        */
-    Thread *r = (Thread *)readyList->Remove();
-    if (currentThread->getCounter() <= 0) {
-        currentThread->setPrio(currentThread->getPrio() + 1);
-    }
-    return r;
+    return (Thread *)readyList->Remove();
 }
 
 //----------------------------------------------------------------------
@@ -161,4 +144,5 @@ Scheduler::Print()
 {
     printf("Ready list contents:\n");
     readyList->Mapcar((VoidFunctionPtr) ThreadPrint);
+    printf("\n");
 }

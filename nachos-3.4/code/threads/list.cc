@@ -150,6 +150,19 @@ List::Mapcar(VoidFunctionPtr func)
     }
 }
 
+void*
+List::Find(void *ptr)
+{
+    for (ListElement *p = first; p != NULL; p = p->next) {
+        printf("%d\n", ptr);
+        printf("%d\n", p->item);
+        if ((int)(p->item) == (int)ptr)
+            return p->item;
+    }
+    printf("cannot Find!\n");
+    return NULL;
+}
+
 void
 List::Change(int index)
 {

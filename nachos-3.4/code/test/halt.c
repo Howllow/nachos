@@ -12,9 +12,34 @@
 
 #include "syscall.h"
 
+int id1;
+int id2;
+char* in;
+char* out;
+
+int spaceid;
+void simple()
+{
+    spaceid = Exec("../test/fileop");
+}
 int
 main()
 {
-    //Halt();
-    /* not reached */
+    /*
+    //File syscall test
+    Create("filetest");
+    in = "hello world!adfasflasfjlzxpadf";
+    id1 = Open("filetest");
+    Write(in, 12, id1);
+    id2 = Open("filetest");
+    Read(out, 5, id2);
+    Read(out, 7, id2);
+    Close(id1);
+    Close(id2);
+    Halt();
+    */
+    Fork(simple);
+    Yield();
+    Join(spaceid);
+    Exit(0);
 }

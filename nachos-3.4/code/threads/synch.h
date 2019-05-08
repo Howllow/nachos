@@ -162,10 +162,10 @@ class RwLock {
     void ReadRelease();
     void WriteAcquire();
     void WriteRelease();
-  private:
     char* name;
     Lock* buf_mutex;
     Lock* read_mutex;
     int readers;
+    int writers;
 };
 #endif // SYNCH_H

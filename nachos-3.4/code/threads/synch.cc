@@ -119,8 +119,10 @@ bool Lock::isHeldByCurrentThread()
 
 void Lock::Acquire() 
 {
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
     mutex->P();
     lockedThread = currentThread;
+    (void) interrupt->SetLevel(oldLevel);
 }
 
 void Lock::Release() 
@@ -129,9 +131,11 @@ void Lock::Release()
     if (isHeldByCurrentThread == FALSE) {
         printf("Release false; Thread %s hasn't held the lock~\n", currentThread->getName());
     }*/
-    ASSERT(isHeldByCurrentThread() == TRUE);
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    //ASSERT(isHeldByCurrentThread() == TRUE);
     mutex->V();
     lockedThread = NULL;
+    (void) interrupt->SetLevel(oldLevel);
 }
 
 Condition::Condition(char* debugName, Lock* lock = NULL) 
@@ -250,9 +254,9 @@ RwLock::ReadAcquire()
     read_mutex->Acquire();
     if (readers == 0) {
         buf_mutex->Acquire();
-        printf("%s gets the Buffer Lock.\n", currentThread->getName());
+        //printf("%s gets the Buffer Lock.\n", currentThread->getName());
     }
-    printf("%s gets the Read Lock.\n", currentThread->getName());
+    //printf("%s gets the Read Lock.\n", currentThread->getName());
     readers++;
     read_mutex->Release();
 }
@@ -261,11 +265,11 @@ void
 RwLock::ReadRelease()
 {
     read_mutex->Acquire();
-    printf("%s releases the Read Lock.\n", currentThread->getName());
+   // printf("%s releases the Read Lock.\n", currentThread->getName());
     readers--;
     if (readers == 0) {
         buf_mutex->Release();
-        printf("%s releases the Buffer Lock.\n", currentThread->getName());
+        //printf("%s releases the Buffer Lock.\n", currentThread->getName());
     }
     read_mutex->Release();
 }
@@ -274,12 +278,14 @@ void
 RwLock::WriteAcquire()
 {
     buf_mutex->Acquire();
-    printf("%s gets the Buffer Lock.\n", currentThread->getName());
+    writers++;
+    //printf("%s gets the Buffer Lock.\n", currentThread->getName());
 }
 
 void
 RwLock::WriteRelease()
 {
-    printf("%s releases the Buffer Lock.\n", currentThread->getName());
+    writers--;
+    //printf("%s releases the Buffer Lock.\n", currentThread->getName());
     buf_mutex->Release();
 }

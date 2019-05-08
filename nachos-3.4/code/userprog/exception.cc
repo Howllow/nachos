@@ -24,183 +24,6 @@
 #include "copyright.h"
 #include "system.h"
 #include "syscall.h"
-#include "machine.h"
-
-//----------------------------------------------------------------------
-// ExitHandler
-// Function to deal with exit syscall
-//----------------------------------------------------------------------
-void
-ExitHandler()
-{
-    if (!currentThread->MapCleared){
-        currentThread->MapCleared = TRUE;
-        printf("Program: %s is Exiting!!\n", currentThread->getName());
-       // printf("TLBMiss: %d,  TLBHit: %d,  MissRate: %f\n", machine->tlbmiss, machine->tlbhit, 
-                                    //float(machine->tlbmiss) / ((machine->tlbmiss) + (machine->tlbhit)));
-        for (int i = 0; i < machine->pageTableSize; i++) {
-            if (machine->pageTable[i].valid) {
-                machine->pageTable[i].valid = FALSE;
-                machine->pageTable[i].use = FALSE;
-                machine->pageTable[i].dirty = FALSE;
-                machine->pageTable[i].readOnly = FALSE; 
-                machine->MemoryMap->Clear(machine->pageTable[i].physicalPage);
-                printf("Deallocate physical page %d for Thread: %s\n", machine->pageTable[i].physicalPage, currentThread->getName());
-            }
-        }
-    }
-    machine->WriteRegister(PCReg, machine->ReadRegister(NextPCReg));
-    currentThread->Finish();
-}
-
-void
-IPExitHandler()
-{
-    if (!currentThread->MapCleared){
-        currentThread->MapCleared = TRUE;
-        printf("Program: %s is Exiting!!\n", currentThread->getName());
-        for (int i = 0; i < NumPhysPages; i++) {
-            if (machine->ipTable[i].valid && machine->ipTable[i].tid == currentThread->getTid()) {
-                machine->ipTable[i].valid = FALSE;
-                machine->ipTable[i].use = FALSE;
-                machine->ipTable[i].dirty = FALSE;
-                machine->ipTable[i].readOnly = FALSE; 
-                machine->ipTable[i].tid = -1;
-                printf("Deallocate physical page %d for Thread: %s\n", i, currentThread->getName());
-            }
-        }
-    }
-    machine->WriteRegister(PCReg, machine->ReadRegister(NextPCReg));
-    currentThread->Finish();
-}
-//----------------------------------------------------------------------
-// TLBMissHandler
-// Function to deal with tlb miss
-// strat=0:FIFO; strat=1:LRU;
-//----------------------------------------------------------------------
-void
-SortLRUList(List* list)
-{
-    int num = list->NumInList();
-    TLBPos* tmp[num];
-    for (int i = 0; i < num; i++) {
-        tmp[i] = list->Remove();
-    }
-    for (int i = 0; i < num; i++) {
-        list->SortedInsert(tmp[i], tmp[i]->lru);
-    }
-    /*
-    TLBPos* tmp1 = machine->TLBList->Remove();
-    TLBPos* tmp2 = machine->TLBList->Remove();
-    TLBPos* tmp3 = machine->TLBList->Remove();
-    TLBPos* tmp4 = machine->TLBList->Remove();
-    machine->TLBList->SortedInsert(tmp1, tmp1->lru);
-    machine->TLBList->SortedInsert(tmp2, tmp2->lru);
-    machine->TLBList->SortedInsert(tmp3, tmp3->lru);
-    machine->TLBList->SortedInsert(tmp4, tmp4->lru);
-    */
-}
-int
-FindPos()
-{
-    for (int i = 0; i < TLBSize; i++) {
-        if (machine->tlb[i].valid == FALSE)
-            return i;
-    }
-    return -1;
-}
-void
-TLBMissHandler(int strat)
-{
-    int vaddr = machine->registers[BadVAddrReg];
-    unsigned int vpn = (unsigned) vaddr / PageSize;
-    int index;
-    if (machine->TLBList->NumInList() < TLBSize) {
-        index = FindPos();
-        ASSERT(index != -1);
-        TLBPos* tmp = new TLBPos(index);
-        if (strat) {
-            machine->TLBList->Change(index);
-        }
-        machine->TLBList->Append(tmp);
-    }
-    else if (!strat) {
-        TLBPos* tmp = machine->TLBList->Remove();
-        index = tmp->index;
-        //printf("%d\n", index);
-        machine->TLBList->Append(tmp);
-    }
-    else {
-        SortLRUList(machine->TLBList);
-        //machine->TLBList->PrintL();
-        TLBPos* tmp = machine->TLBList->Remove();
-        index = tmp->index;
-        tmp->lru = 0;
-        machine->TLBList->Change(index);
-        machine->TLBList->Append(tmp);
-    }
-    //printf("%d\n", index);
-    machine->tlb[index].valid = TRUE;
-    machine->tlb[index].virtualPage = vpn;
-    machine->tlb[index].physicalPage = machine->pageTable[vpn].physicalPage;
-    machine->tlb[index].use = FALSE;
-    machine->tlb[index].dirty = FALSE;
-    machine->tlb[index].readOnly = FALSE;
-}
-//----------------------------------------------------------------------
-// IPMissHandler
-// Function to deal with inverse page table
-//----------------------------------------------------------------------
-int 
-FindIPos()
-{
-    for (int i = 0; i < NumPhysPages; i++) {
-        if (!machine->ipTable[i].valid) {
-            return i;
-        }
-    }
-    return -1;
-}
-void
-IPMissHandler()
-{
-    OpenFile *vMem = fileSystem->Open("vMem");
-    ASSERT(vMem != NULL);
-
-    int vaddr = machine->registers[BadVAddrReg];
-    unsigned int vpn = (unsigned) vaddr / PageSize;
-    int index;
-    index = FindIPos();
-    if (index != -1) {
-        TLBPos* tmp = new TLBPos(index);
-        machine->IPList->Change(index);
-        machine->IPList->Append(tmp);
-    }
-    else {
-        SortLRUList(machine->IPList);
-        TLBPos* tmp = machine->IPList->Remove();
-        index = tmp->index;
-        tmp->lru = 0;
-        machine->IPList->Change(index);
-        machine->IPList->Append(tmp);
-        if (machine->ipTable[index].dirty) {
-            printf("Thread: %s Write back physical page %d\n", currentThread->getName(), index);
-            vMem->WriteAt(&(machine->mainMemory[index*PageSize]), PageSize
-                , machine->ipTable[index].virtualPage*PageSize);
-        }
-    }
-    bzero(machine->mainMemory + index * PageSize, PageSize);
-    printf("Thread: %s Loading virtual page %d at physical page %d\n", currentThread->getName(), vpn, index);
-    vMem->ReadAt(&(machine->mainMemory[index*PageSize]), PageSize, vpn*PageSize);
-    delete vMem;
-    machine->ipTable[index].valid = TRUE;
-    machine->ipTable[index].use = FALSE;
-    machine->ipTable[index].dirty = FALSE;
-    machine->ipTable[index].readOnly = FALSE;
-    machine->ipTable[index].tid = currentThread->getTid();
-    machine->ipTable[index].virtualPage = vpn;
-    machine->ipTable[index].physicalPage = index;
-}
 
 //----------------------------------------------------------------------
 // ExceptionHandler
@@ -224,6 +47,230 @@ IPMissHandler()
 //	"which" is the kind of exception.  The list of possible exceptions 
 //	are in machine.h.
 //----------------------------------------------------------------------
+void
+MyCreate()
+{
+	int fileaddr = machine->ReadRegister(4);
+	int cnt = 0;
+	int x;
+	machine->ReadMem(fileaddr++, 1, &x);
+	cnt++;
+	while(x) {
+		machine->ReadMem(fileaddr++, 1, &x);
+		cnt++;
+	} // get filename length
+	char name[cnt];
+	fileaddr -= cnt;
+	for (int i = 0; i < cnt; i++) {
+		machine->ReadMem(fileaddr + i, 1, &x);
+		name[i] = (char)x;
+	}
+	fileSystem->Create(name, 256);
+	printf("Thread %s Created %s\n", currentThread->getName(), name);
+	int newPC = machine->ReadRegister(NextPCReg);
+	machine->WriteRegister(PCReg, newPC); // forward the PC
+	machine->WriteRegister(2, 0); // set return value
+	return;
+}
+
+void
+MyOpen()
+{
+	int fileaddr = machine->ReadRegister(4);
+	int cnt = 0;
+	int x;
+	machine->ReadMem(fileaddr++, 1, &x);
+	cnt++;
+	while(x) {
+		machine->ReadMem(fileaddr++, 1, &x);
+		cnt++;
+	} // get filename length
+	char name[cnt];
+	fileaddr -= cnt;
+	for (int i = 0; i < cnt; i++) {
+		machine->ReadMem(fileaddr + i, 1, &x);
+		name[i] = (char)x;
+	}
+
+	OpenFile *file = fileSystem->Open(name);
+	if (file == NULL) {
+		printf("cannot open!\n");
+	}
+
+	int id = currentThread->filenum; // get id
+	currentThread->filenum++; // increase filenum
+	currentThread->filetable[id] = file; // set openfile pointer
+	printf("Thread %s Open %s\n", currentThread->getName(), name);
+	machine->WriteRegister(2, id); // set return value
+	int newPC = machine->ReadRegister(NextPCReg);
+	machine->WriteRegister(PCReg, newPC); // forward the PC
+	return;
+}
+
+void
+MyClose()
+{
+	int id = machine->ReadRegister(4);
+	OpenFile *file = currentThread->filetable[id];
+	if (file != NULL) {
+		delete file;
+		currentThread->filetable[id] = NULL;
+		currentThread->filenum--;
+	}
+	printf("Thread %s Close a File, id is %d\n", currentThread->getName(), id);
+	int newPC = machine->ReadRegister(NextPCReg);
+	machine->WriteRegister(PCReg, newPC); // forward the PC
+	machine->WriteRegister(2, 0); // set return value
+	return;
+}
+
+void
+MyRead()
+{
+	int buffer_addr = machine->ReadRegister(4);
+	int size = machine->ReadRegister(5);
+	int id = machine->ReadRegister(6);
+	OpenFile *file = currentThread->filetable[id];
+	if (file == NULL){
+		printf("cannot open!\n");
+	}
+	char tmpbuf[size];
+	int retval = file->Read(tmpbuf, size);
+	printf("Thread %s Read a File, id is %d\n", currentThread->getName(), id);
+	printf("Contents:%s\n", tmpbuf);
+	int i = 0;
+	while(i < size) {
+		machine->WriteMem(buffer_addr + i, 1, int(tmpbuf[i]));
+		i++;
+	}
+	int newPC = machine->ReadRegister(NextPCReg);
+	machine->WriteRegister(PCReg, newPC); // forward the PC
+	machine->WriteRegister(2, retval); // set return value
+	return;
+}
+
+void
+MyWrite()
+{
+	int buffer_addr = machine->ReadRegister(4);
+	int size = machine->ReadRegister(5);
+	int id = machine->ReadRegister(6);
+	OpenFile *file = currentThread->filetable[id];
+	if (file == NULL){
+		printf("cannot open!\n");
+	}
+	char tmpbuf[size];
+	int val;
+	int i = 0;
+	while(i < size) {
+		machine->ReadMem(buffer_addr, 1, &val);
+		tmpbuf[i++] = (char)val;
+		buffer_addr++;
+	}
+	file->Write(tmpbuf, size);
+	printf("Thread %s Write a File, id is %d\n", currentThread->getName(), id);
+	int newPC = machine->ReadRegister(NextPCReg);
+	machine->WriteRegister(PCReg, newPC); // forward the PC
+	machine->WriteRegister(2, 0); // set return value
+	return;
+}
+
+void
+StartPro(char *name)
+{
+	OpenFile *ex = fileSystem->Open(name);
+	AddrSpace *space = new AddrSpace(ex);
+	currentThread->space = space;
+	space->InitRegisters();
+	space->RestoreState();
+	printf("Thread %s is executing %s\n", currentThread->getName(), name);
+	machine->Run();
+}
+
+void
+MyExec()
+{
+	printf("Exec Call!\n");
+	int fileaddr = machine->ReadRegister(4);
+	int cnt = 0;
+	int x;
+	machine->ReadMem(fileaddr++, 1, &x);
+	cnt++;
+	while(x) {
+		machine->ReadMem(fileaddr++, 1, &x);
+		cnt++;
+	} // get filename length
+	char name[cnt];
+	fileaddr -= cnt;
+	for (int i = 0; i < cnt; i++) {
+		machine->ReadMem(fileaddr + i, 1, &x);
+		name[i] = (char)x;
+	}
+
+	Thread *execthread = new Thread("execThread");
+	currentThread->children->Append(execthread);
+	execthread->Fork(StartPro, name);
+	machine->WriteRegister(2, int(execthread)); // set return value
+	int newPC = machine->ReadRegister(NextPCReg);
+	machine->WriteRegister(PCReg, newPC); // forward the PC
+}
+
+void
+StartFork(int addr)
+{
+	printf("Thread %s start running!\n", currentThread->getName());
+	machine->WriteRegister(PCReg, addr);
+	machine->WriteRegister(NextPCReg, addr + 4);
+	machine->Run();
+}
+
+void
+MyFork()
+{
+	int addr = machine->ReadRegister(4);
+	Thread *forkthread = new Thread("forkThread");
+	AddrSpace *newspace = new AddrSpace(currentThread->space); // copy the space
+	forkthread->space = newspace;
+	forkthread->SaveUserState(); //initialize
+	forkthread->Fork(StartFork, (void*)addr);
+	machine->WriteRegister(2, 0); // set return value
+	int newPC = machine->ReadRegister(NextPCReg);
+	machine->WriteRegister(PCReg, newPC); // forward the PC
+}
+
+void
+MyJoin()
+{
+	int spaceid = machine->ReadRegister(4);
+	Thread *jointhread = (Thread*) spaceid;
+	printf("Thread %s Join and Wait!\n", currentThread->getName());
+	printf("%d\n", spaceid);
+	while(currentThread->children->Find((void*)jointhread)) {
+		currentThread->Yield();
+	}
+	printf("Thread %s End Waiting!\n", currentThread->getName());
+	int newPC = machine->ReadRegister(NextPCReg);
+	machine->WriteRegister(PCReg, newPC); // forward the PC
+	machine->WriteRegister(2, 0); // set return value
+}
+
+void
+MyExit()
+{
+	int newPC = machine->ReadRegister(NextPCReg);
+	machine->WriteRegister(PCReg, newPC); // forward the PC
+	printf("Exit!\n");
+	currentThread->Finish();
+}
+
+void
+MyYield()
+{
+	int newPC = machine->ReadRegister(NextPCReg);
+	machine->WriteRegister(PCReg, newPC); // forward the PC
+	printf("Thread %s Yield!\n", currentThread->getName());
+	currentThread->Yield();
+}
 
 void
 ExceptionHandler(ExceptionType which)
@@ -234,17 +281,45 @@ ExceptionHandler(ExceptionType which)
 	DEBUG('a', "Shutdown, initiated by user program.\n");
    	interrupt->Halt();
     } 
-    else if ((which == SyscallException) && (type == SC_Exit)) {
-        if (machine->tlb != NULL)
-            ExitHandler();
-        else 
-            IPExitHandler();
+    else if ((which == SyscallException) && (type == SC_Create))
+    {
+    	MyCreate();
     }
-    else if ((which == PageFaultException) && (machine->tlb != NULL)) {
-    	TLBMissHandler(Strategy);
+    else if ((which == SyscallException) && (type == SC_Open))
+    {
+    	MyOpen();
     }
-    else if ((which == PageFaultException) && (machine->tlb == NULL)) {
-        IPMissHandler();
+    else if ((which == SyscallException) && (type == SC_Close))
+    {
+    	MyClose();
+    }
+    else if ((which == SyscallException) && (type == SC_Read))
+    {
+    	MyRead();
+    }
+    else if ((which == SyscallException) && (type == SC_Write))
+    {
+    	MyWrite();
+    }
+    else if ((which == SyscallException) && (type == SC_Fork))
+    {
+    	MyFork();
+    }
+    else if ((which == SyscallException) && (type == SC_Join))
+    {
+    	MyJoin();
+    }
+    else if ((which == SyscallException) && (type == SC_Exit))
+    {
+    	MyExit();
+    }
+    else if ((which == SyscallException) && (type == SC_Yield))
+    {
+    	MyYield();
+    }
+    else if ((which == SyscallException) && (type == SC_Exec))
+    {
+    	MyExec();
     }
     else {
 	printf("Unexpected user mode exception %d %d\n", which, type);
