@@ -20,7 +20,8 @@
 #include "copyright.h"
 #include "thread.h"
 #include "list.h"
-
+#include <vector>
+#define MSG_SIZE 256
 // The following class defines a "semaphore" whose value is a non-negative
 // integer.  The semaphore has only two operations P() and V():
 //
@@ -168,4 +169,24 @@ class RwLock {
     int readers;
     int writers;
 };
+
+
+struct Message {
+    int dstid;
+    int srcid;
+    char data[MSG_SIZE];
+    Message() {
+        memset(data, 0, sizeof(data));
+    }
+};
+
+class MessageQ {
+public:
+    MessageQ();
+    ~MessageQ();
+    int SendMsg*(char* content, int dstid);
+    char* RecvMsg*(int srcid);
+private:
+    vector<Message*> buffer;
+}
 #endif // SYNCH_H

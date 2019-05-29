@@ -39,8 +39,9 @@
 
 #include "copyright.h"
 #include "utility.h"
-#include "list.h"
-#include "../filesys/openfile.h"
+
+#include <sys/types.h>
+#include <unistd.h>
 
 #ifdef USER_PROGRAM
 #include "machine.h"
@@ -101,13 +102,15 @@ class Thread {
     void CheckOverflow();   			// Check if thread has 
 						// overflowed its stack
     void setStatus(ThreadStatus st) { status = st; }
+    ThreadStatus getStatus() { return status; }
     char* getName() { return (name); }
-    void Print() { printf("%s, ", name); }
-
-    OpenFile *filetable[200];
-    int filenum;
-    Thread *father;
-    List *children;
+    void Print();
+    int getTid() { return (this->tid); }
+    int setPrio(int newPrio);
+    int getPrio() { return (this->priority); }
+    void setCounter() { counter = (20 - priority) * 4; }
+    int getCounter() { return (this->counter); }
+    int minusCounter(int m) { this->counter -= m; return counter;}
 
   private:
     // some of the private data for this class is listed above
@@ -117,10 +120,14 @@ class Thread {
 					// (If NULL, don't deallocate stack)
     ThreadStatus status;		// ready, running or blocked
     char* name;
-
+    int tid;
+    int uid;
+    int priority = 0;
+    int counter = 10000;
     void StackAllocate(VoidFunctionPtr func, void *arg);
     					// Allocate a stack for thread.
 					// Used internally by Fork()
+    int TidAllocate(); // Allocate a tid for thread.
 
 #ifdef USER_PROGRAM
 // A thread running a user program actually has *two* sets of CPU registers -- 
@@ -132,7 +139,7 @@ class Thread {
   public:
     void SaveUserState();		// save user-level register state
     void RestoreUserState();		// restore user-level register state
-
+    bool MapCleared;
     AddrSpace *space;			// User code this thread is running.
 #endif
 };

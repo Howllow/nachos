@@ -289,3 +289,41 @@ RwLock::WriteRelease()
     //printf("%s releases the Buffer Lock.\n", currentThread->getName());
     buf_mutex->Release();
 }
+
+int
+MessageQ::SendMsg(char* content, int dstid)
+{
+    if (sizeof(content) > MSG_SIZE) {
+        printf("Message too big!\n");
+        return -1;
+    }
+    Message* tmpmsg = new Message;
+    memcpy(tmpmsg->data, content, sizeof(content));
+    tmpmsg->dstid = dstid;
+    tmpmsg->srcid = currentThread->getTid();
+    buffer.push_back(tmpmsg);
+    printf("Thread %s send message %s to TID:%d\n", currentThread->getName(), content, dstid);
+    return 0;
+}
+
+char*
+MessageQ::RecvMsg(int srcid)
+{
+    char** getmsg = new char*[10];
+    int cnt = 0;
+    for (int i = 0; i < 10; i++) 
+        getmsg[i] = NULL;
+    vector<Message*>::iterator it;
+    for (it = buffer.begin(); it != buffer.end(); it++) {
+        if ((*it)->dstid == currentThread->getTid()) {
+            if (srcid < 0 || srcid == (*it)->srcid) {
+                getmsg[cnt++] = (*it)->data;
+                buffer.erase(it);
+                if (cnt >= 10) {
+                    break;
+                }
+            }
+        }
+    }
+    return getmsg;
+}

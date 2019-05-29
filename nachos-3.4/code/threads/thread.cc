@@ -20,9 +20,11 @@
 #include "synch.h"
 #include "system.h"
 
+#include <sys/types.h>
 #define STACK_FENCEPOST 0xdeadbeef	// this is put at the top of the
 					// execution stack, for detecting 
 					// stack overflows
+
 
 //----------------------------------------------------------------------
 // Thread::Thread
@@ -38,12 +40,12 @@ Thread::Thread(char* threadName)
     stackTop = NULL;
     stack = NULL;
     status = JUST_CREATED;
-    father = currentThread;
-    children = new List();
-    if (father != NULL)
-        father->children->Append(this);
+    tid = TidAllocate();
+    //ASSERT(tid != 129);
+    uid = getuid();
 #ifdef USER_PROGRAM
     space = NULL;
+    MapCleared = FALSE;
 #endif
 }
 
@@ -62,46 +64,13 @@ Thread::Thread(char* threadName)
 Thread::~Thread()
 {
     DEBUG('t', "Deleting thread \"%s\"\n", name);
-
+    //currentThread->Print();
     ASSERT(this != currentThread);
-    if (stack != NULL)
-	DeallocBoundedArray((char *) stack, StackSize * sizeof(int));
+    if (stack != NULL) {
+	   DeallocBoundedArray((char *) stack, StackSize * sizeof(int));
+       tp_array[tid] = NULL;
+   }
 }
-
-//----------------------------------------------------------------------
-// Thread::Fork
-// 	Invoke (*func)(arg), allowing caller and callee to execute 
-//	concurrently.
-//
-//	NOTE: although our definition allows only a single integer argument
-//	to be passed to the procedure, it is possible to pass multiple
-//	arguments by making them fields of a structure, and passing a pointer
-//	to the structure as "arg".
-//
-// 	Implemented as the following steps:
-//		1. Allocate a stack
-//		2. Initialize the stack so that a call to SWITCH will
-//		cause it to run the procedure
-//		3. Put the thread on the ready queue
-// 	
-//	"func" is the procedure to run concurrently.
-//	"arg" is a single argument to be passed to the procedure.
-//----------------------------------------------------------------------
-
-void 
-Thread::Fork(VoidFunctionPtr func, void *arg)
-{
-    DEBUG('t', "Forking thread \"%s\" with func = 0x%x, arg = %d\n",
-	  name, (int) func, (int*) arg);
-    
-    StackAllocate(func, arg);
-
-    IntStatus oldLevel = interrupt->SetLevel(IntOff);
-    scheduler->ReadyToRun(this);	// ReadyToRun assumes that interrupts 
-					// are disabled!
-    //currentThread->Yield();
-    (void) interrupt->SetLevel(oldLevel);
-}    
 
 //----------------------------------------------------------------------
 // Thread::CheckOverflow
@@ -148,18 +117,13 @@ Thread::CheckOverflow()
 void
 Thread::Finish ()
 {
-    (void) interrupt->SetLevel(IntOff);		
+    //currentThread->Print();
+    (void) interrupt->SetLevel(IntOff);	
     ASSERT(this == currentThread);
     
     DEBUG('t', "Finishing thread \"%s\"\n", getName());
     
     threadToBeDestroyed = currentThread;
-    while(!children->IsEmpty())
-    {
-        Thread *child = children->Remove();
-        father->children->Append(child);
-    }
-    father->children->Remove(this);
     Sleep();					// invokes SWITCH
     // not reached
 }
@@ -191,10 +155,9 @@ Thread::Yield ()
     ASSERT(this == currentThread);
     
     DEBUG('t', "Yielding thread \"%s\"\n", getName());
-    
     nextThread = scheduler->FindNextToRun();
     if (nextThread != NULL) {
-	scheduler->ReadyToRun(this);
+    scheduler->ReadyToRun(this);
 	scheduler->Run(nextThread);
     }
     (void) interrupt->SetLevel(oldLevel);
@@ -228,11 +191,10 @@ Thread::Sleep ()
     ASSERT(interrupt->getLevel() == IntOff);
     
     DEBUG('t', "Sleeping thread \"%s\"\n", getName());
-
+    //printf("Sleeping thread \"%s\"\n", getName());
     status = BLOCKED;
     while ((nextThread = scheduler->FindNextToRun()) == NULL)
 	interrupt->Idle();	// no one to run, wait for an interrupt
-        
     scheduler->Run(nextThread); // returns when we've been signalled
 }
 
@@ -247,6 +209,93 @@ Thread::Sleep ()
 static void ThreadFinish()    { currentThread->Finish(); }
 static void InterruptEnable() { interrupt->Enable(); }
 void ThreadPrint(int arg){ Thread *t = (Thread *)arg; t->Print(); }
+
+//----------------------------------------------------------------------
+// Thread::Fork
+//  Invoke (*func)(arg), allowing caller and callee to execute 
+//  concurrently.
+//
+//  NOTE: although our definition allows only a single integer argument
+//  to be passed to the procedure, it is possible to pass multiple
+//  arguments by making them fields of a structure, and passing a pointer
+//  to the structure as "arg".
+//
+//  Implemented as the following steps:
+//      1. Allocate a stack
+//      2. Initialize the stack so that a call to SWITCH will
+//      cause it to run the procedure
+//      3. Put the thread on the ready queue
+//  
+//  "func" is the procedure to run concurrently.
+//  "arg" is a single argument to be passed to the procedure.
+//----------------------------------------------------------------------
+
+void 
+Thread::Fork(VoidFunctionPtr func, void *arg)
+{
+    if (tid == 129) {
+        printf("You cannot create more threads!\n");
+        ThreadFinish();
+    }
+
+    DEBUG('t', "Forking thread \"%s\" with func = 0x%x, arg = %d\n",
+      name, (int) func, (int*) arg);
+    
+    StackAllocate(func, arg);
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    scheduler->ReadyToRun(this);    // ReadyToRun assumes that interrupts 
+                    // are disabled!
+    (void) interrupt->SetLevel(oldLevel);
+    //currentThread->Yield();
+}    
+
+//----------------------------------------------------------------------
+// Thread::TidAllocate
+// Allocate a tid for the thread,and change the content of tp_array
+// If there've already been 128 threads, return 129.
+//----------------------------------------------------------------------
+
+int
+Thread::TidAllocate()
+{
+    int num = 129;
+    for (int i = 0; i < 128; i++) {
+        if (tp_array[i] == NULL) {
+            tp_array[i] = this;
+            num = i;
+            break;
+        }
+    }
+    return num;
+}
+
+//----------------------------------------------------------------------
+// Thread::Print
+// Print information of given thread
+//----------------------------------------------------------------------
+
+void
+Thread::Print()
+{
+    printf("TID: %d, Name: %s, UID: %d, PRIO: %d, COUNTER: %d\n", tid, name, uid, priority, counter);
+    return;
+}
+//----------------------------------------------------------------------
+// Thread::setPrio
+// Set new priority of this thread
+// Return old priority of this thread
+//----------------------------------------------------------------------
+
+int
+Thread::setPrio(int newPrio)
+{
+    int oldPrio = priority;
+    if (newPrio < 0) newPrio = 0;
+    if (newPrio > 15) newPrio = 15;
+    priority = newPrio;
+    setCounter();
+    return oldPrio;
+} 
 
 //----------------------------------------------------------------------
 // Thread::StackAllocate
